@@ -201,6 +201,42 @@ fn init_vram(efi_system_table: &EfiSystemTable) -> Result<VramBufferInfo> {
     })
 }
 
+fn calc_slope_point(da: i64, db: i64, ia: i64) -> Option<i64> {
+    if da < db {
+        None
+    } else if da == 0 {
+        Some(0)
+    } else if (0..=da).contains(&ia) {
+        Some((2 * db * ia + da) / da / 2)
+    } else {
+        None
+    }
+}
+
+fn draw_line<T: Bitmap>(buf: &mut T, color: u32, start: (i64, i64), end: (i64, i64)) -> Result<()> {
+    if !buf.is_in_x_range(start.0)
+        || !buf.is_in_y_range(start.1)
+        || !buf.is_in_x_range(end.0)
+        || !buf.is_in_y_range(end.1)
+    {
+        return Err("Out of Range");
+    }
+    let dx = (end.0 - start.0).abs();
+    let sx = (end.0 - start.0).signum();
+    let dy = (end.1 - start.1).abs();
+    let sy = (end.1 - start.1).signum();
+    if dx >= dy {
+        for (rx, ry) in (0..dx).flat_map(|rx| calc_slope_point(dx, dy, rx).map(|ry| (rx, ry))) {
+            draw_point(buf, color, start.0 + rx * sx, start.1 + ry * sy)?;
+        }
+    } else {
+        for (rx, ry) in (0..dy).flat_map(|ry| calc_slope_point(dy, dx, ry).map(|rx| (rx, ry))) {
+            draw_point(buf, color, start.0 + rx * sx, start.1 + ry * sy)?;
+        }
+    }
+    Ok(())
+}
+
 #[no_mangle]
 fn efi_main(_image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     let mut vram = init_vram(efi_system_table).expect("init_vram failed");
@@ -215,6 +251,22 @@ fn efi_main(_image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
 
     for i in 0..256 {
         let _ = draw_point(&mut vram, 0x010101 * i as u32, i, i);
+    }
+
+    let grid_size: i64 = 32;
+    let rect_size: i64 = grid_size * 8;
+    for i in (0..=rect_size).step_by(grid_size as usize) {
+        let _ = draw_line(&mut vram, 0xff0000, (0, i), (rect_size, i));
+        let _ = draw_line(&mut vram, 0xff0000, (i, 0), (i, rect_size));
+    }
+    let cx = rect_size / 2;
+    let cy = rect_size / 2;
+
+    for i in (0..=rect_size).step_by(grid_size as usize) {
+        let _ = draw_line(&mut vram, 0xffff00, (cx, cy), (0, i));
+        let _ = draw_line(&mut vram, 0x00ffff, (cx, cy), (i, 0));
+        let _ = draw_line(&mut vram, 0xff00ff, (cx, cy), (rect_size, i));
+        let _ = draw_line(&mut vram, 0xffffff, (cx, cy), (i, rect_size));
     }
 
     loop {
