@@ -3,8 +3,8 @@
 // https://github.com/rust-lang/rust/issues/106655
 #![feature(offset_of)]
 use core::cmp::min;
-use core::fmt::Write;
 use core::fmt;
+use core::fmt::Write;
 use core::{arch::asm, mem::offset_of, mem::size_of, panic::PanicInfo, ptr::null_mut};
 
 type EfiVoid = u8;
@@ -36,7 +36,7 @@ pub enum EfiMemoryType {
     MEMORY_MAPPED_IO,
     MEMORY_MAPPED_IO_PORT_SPACE,
     PAL_CODE,
-    PERSISTENT_MEMORY
+    PERSISTENT_MEMORY,
 }
 
 #[repr(C)]
@@ -46,17 +46,17 @@ struct EfiMemoryDescriptor {
     physical_start: u64,
     virtual_start: u64,
     number_of_pages: u64,
-    attribute: u64
+    attribute: u64,
 }
 
 const MEMORY_MAP_BUFFER_SIZE: usize = 0x8000;
 
 struct MemoryMapIterator<'a> {
     map: &'a MemoryMapHolder,
-    ofs: usize
+    ofs: usize,
 }
 
-impl <'a> Iterator for MemoryMapIterator<'a> {
+impl<'a> Iterator for MemoryMapIterator<'a> {
     type Item = &'a EfiMemoryDescriptor;
     fn next(&mut self) -> Option<Self::Item> {
         if self.ofs >= self.map.memory_map_size {
@@ -76,7 +76,7 @@ struct MemoryMapHolder {
     memory_map_size: usize,
     map_key: usize,
     descriptor_size: usize,
-    descriptor_version: u32
+    descriptor_version: u32,
 }
 
 impl MemoryMapHolder {
@@ -86,11 +86,11 @@ impl MemoryMapHolder {
             memory_map_size: MEMORY_MAP_BUFFER_SIZE,
             map_key: 0,
             descriptor_size: 0,
-            descriptor_version: 0
+            descriptor_version: 0,
         }
     }
     pub fn iter(&self) -> MemoryMapIterator {
-        MemoryMapIterator {map: self, ofs: 0}
+        MemoryMapIterator { map: self, ofs: 0 }
     }
 }
 
@@ -120,13 +120,12 @@ impl EfiBootServicesTable {
             map.memory_map_buffer.as_mut_ptr(),
             &mut map.map_key,
             &mut map.descriptor_size,
-            &mut map.descriptor_version
+            &mut map.descriptor_version,
         )
     }
 }
 const _: () = assert!(offset_of!(EfiBootServicesTable, get_memory_map) == 56);
 const _: () = assert!(offset_of!(EfiBootServicesTable, locate_protocol) == 320);
-
 
 #[repr(C)]
 struct EfiSystemTable {
@@ -387,12 +386,16 @@ fn draw_str_fg<T: Bitmap>(buf: &mut T, x: i64, y: i64, color: u32, s: &str) {
 struct VramTextWriter<'a> {
     vram: &'a mut VramBufferInfo,
     cursor_x: i64,
-    cursor_y: i64
+    cursor_y: i64,
 }
 
 impl<'a> VramTextWriter<'a> {
     fn new(vram: &'a mut VramBufferInfo) -> Self {
-        Self { vram, cursor_x: 0, cursor_y: 0 }
+        Self {
+            vram,
+            cursor_x: 0,
+            cursor_y: 0,
+        }
     }
 }
 
@@ -401,7 +404,7 @@ impl fmt::Write for VramTextWriter<'_> {
         for c in s.chars() {
             if c == '\n' {
                 self.cursor_y += 16;
-                self.cursor_x =  0;
+                self.cursor_x = 0;
                 continue;
             }
             draw_font_fg(self.vram, self.cursor_x, self.cursor_y, 0xffffff, c);
@@ -409,6 +412,26 @@ impl fmt::Write for VramTextWriter<'_> {
         }
         Ok(())
     }
+}
+
+fn draw_test_pattern<T: Bitmap>(buf: &mut T) {
+    let w = 128;
+    let left = buf.width() - w - 1;
+    let colors = [0x000000, 0xff0000, 0x00ff00, 0x0000ff];
+    let h = 64;
+    for (i, c) in colors.iter().enumerate() {
+        let y = i as i64 * h;
+        fill_rect(buf, *c, left, y, h, h).expect("fill_rect failed");
+        fill_rect(buf, !*c, left + h, y, h, h).expect("fill_rect failed");
+    }
+    let points = [(0, 0), (0, w), (w, 0), (w, w)];
+    for (x0, y0) in points.iter() {
+        for (x1, y1) in points.iter() {
+            let _ = draw_line(buf, 0xffffff, (left + *x0, *y0), (left + *x1, *y1));
+        }
+    }
+    draw_str_fg(buf, left, h * colors.len() as i64, 0x00ff00, "0123456789");
+    draw_str_fg(buf, left, h * colors.len() as i64 + 16, 0x00ff00, "ABCDEF");
 }
 
 #[no_mangle]
@@ -419,47 +442,31 @@ fn efi_main(_image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     let vh = vram.height;
 
     fill_rect(&mut vram, 0x000000, 0, 0, vw, vh).expect("fill_rect failed");
-    fill_rect(&mut vram, 0xff0000, 32, 32, 32, 32).expect("fill_rect failed");
-    fill_rect(&mut vram, 0x00ff00, 64, 64, 64, 64).expect("fill_rect failed");
-    fill_rect(&mut vram, 0x0000ff, 128, 128, 128, 128).expect("fill_rect failed");
-
-    for i in 0..256 {
-        let _ = draw_point(&mut vram, 0x010101 * i as u32, i, i);
-    }
-
-    let grid_size: i64 = 32;
-    let rect_size: i64 = grid_size * 8;
-    for i in (0..=rect_size).step_by(grid_size as usize) {
-        let _ = draw_line(&mut vram, 0xff0000, (0, i), (rect_size, i));
-        let _ = draw_line(&mut vram, 0xff0000, (i, 0), (i, rect_size));
-    }
-    let cx = rect_size / 2;
-    let cy = rect_size / 2;
-
-    for i in (0..=rect_size).step_by(grid_size as usize) {
-        let _ = draw_line(&mut vram, 0xffff00, (cx, cy), (0, i));
-        let _ = draw_line(&mut vram, 0x00ffff, (cx, cy), (i, 0));
-        let _ = draw_line(&mut vram, 0xff00ff, (cx, cy), (rect_size, i));
-        let _ = draw_line(&mut vram, 0xffffff, (cx, cy), (i, rect_size));
-    }
-
-    for (i, c) in "ABCDEF".chars().enumerate() {
-        draw_font_fg(&mut vram, i as i64 * 16 + 256, i as i64 * 16, 0xffffff, c)
-    }
-
-    draw_str_fg(&mut vram, 256, 256, 0xffffff, "Hello, world!");
+    draw_test_pattern(&mut vram);
     let mut w = VramTextWriter::new(&mut vram);
     for i in 0..4 {
         writeln!(w, "i={i}").unwrap();
     }
 
     let mut memory_map = MemoryMapHolder::new();
-    let status = efi_system_table.boot_services.get_memory_map(&mut memory_map);
+    let status = efi_system_table
+        .boot_services
+        .get_memory_map(&mut memory_map);
     writeln!(w, "{status:?}").unwrap();
+    let mut total_memory_pages = 0;
     for e in memory_map.iter() {
+        if e.memory_type != EfiMemoryType::CONVENTIONAL_MEMORY {
+            continue;
+        }
+        total_memory_pages += e.number_of_pages;
         writeln!(w, "{e:?}").unwrap();
     }
-
+    let total_memory_size_mib = total_memory_pages * 4096 / 1024 / 1024;
+    writeln!(
+        w,
+        "Total: {total_memory_pages} pages = {total_memory_size_mib} MiB"
+    )
+    .unwrap();
     loop {
         hlt()
     }
