@@ -1,8 +1,10 @@
 use core::fmt;
-use core::mem::{offset_of, size_of};
+use core::mem::offset_of;
+use core::mem::size_of;
 use core::ptr::null_mut;
 
-use crate::graphics::{draw_font_fg, Bitmap};
+use crate::graphics::draw_font_fg;
+use crate::graphics::Bitmap;
 
 type EfiVoid = u8;
 pub type EfiHandle = u64;

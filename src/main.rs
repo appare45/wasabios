@@ -1,8 +1,9 @@
 #![no_std]
 #![no_main]
 // https://github.com/rust-lang/rust/issues/106655
+use core::arch::asm;
 use core::fmt::Write;
-use core::{arch::asm, panic::PanicInfo};
+use core::panic::PanicInfo;
 use wasabi::graphics::fill_rect;
 use wasabi::graphics::Bitmap;
 use wasabi::uefi::exit_from_efi_boot_services;
