@@ -1,11 +1,10 @@
 #![no_std]
 #![no_main]
-// https://github.com/rust-lang/rust/issues/106655
-use core::arch::asm;
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use wasabi::graphics::fill_rect;
 use wasabi::graphics::Bitmap;
+use wasabi::qemu::exit_qemu;
 use wasabi::uefi::exit_from_efi_boot_services;
 use wasabi::uefi::init_vram;
 use wasabi::uefi::EfiMemoryType;
@@ -15,16 +14,11 @@ use wasabi::uefi::VramTextWriter;
 use wasabi::graphics::draw_test_pattern;
 use wasabi::uefi::EfiHandle;
 use wasabi::uefi::EfiSystemTable;
-
-pub fn hlt() {
-    unsafe { asm!("hlt") }
-}
+use wasabi::x86::hlt;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    loop {
-        hlt()
-    }
+    exit_qemu(wasabi::qemu::QemuExitCode::Fail)
 }
 
 #[no_mangle]
