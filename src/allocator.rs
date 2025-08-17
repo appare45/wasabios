@@ -24,6 +24,11 @@ pub fn round_up_to_nearest_pow2(v: usize) -> Result<usize> {
         .ok_or("Out of range")
 }
 
+#[test_case]
+fn round_up_to_nearest_pow2_test() {
+    unimplemented!("cargo test should fail")
+}
+
 struct Header {
     next_header: Option<Box<Header>>,
     size: usize,
