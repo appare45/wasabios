@@ -26,7 +26,16 @@ pub fn round_up_to_nearest_pow2(v: usize) -> Result<usize> {
 
 #[test_case]
 fn round_up_to_nearest_pow2_test() {
-    unimplemented!("cargo test should fail")
+    assert_eq!(round_up_to_nearest_pow2(0), Err("Out of range"));
+    assert_eq!(round_up_to_nearest_pow2(1), Ok(1));
+    assert_eq!(round_up_to_nearest_pow2(2), Ok(2));
+    assert_eq!(round_up_to_nearest_pow2(3), Ok(4));
+    assert_eq!(round_up_to_nearest_pow2(4), Ok(4));
+    assert_eq!(round_up_to_nearest_pow2(5), Ok(8));
+    assert_eq!(round_up_to_nearest_pow2(6), Ok(8));
+    assert_eq!(round_up_to_nearest_pow2(7), Ok(8));
+    assert_eq!(round_up_to_nearest_pow2(8), Ok(8));
+    assert_eq!(round_up_to_nearest_pow2(9), Ok(16));
 }
 
 struct Header {
@@ -78,7 +87,7 @@ impl Header {
         // 2のべき乗になるようにサイズを多めに確保する、最低でもHEADER_SIZE分（1つHeaderが作れるように）は確保されるように調整する
         let size = max(round_up_to_nearest_pow2(size).ok()?, HEADER_SIZE);
         let align = max(align, HEADER_SIZE);
-        if self.is_allocated() || self.can_provide(size, align) {
+        if self.is_allocated() || !self.can_provide(size, align) {
             None
         } else {
             // 今回のprovideを通じて消費したメモリの量
@@ -108,6 +117,7 @@ impl Header {
                 size_used += header_for_padding.size;
                 // 確保済み->Padding->確保元
                 header_for_padding.next_header = header_for_allocated.next_header.take();
+                header_for_allocated.next_header = Some(header_for_padding);
             }
             assert!(self.size >= size_used + HEADER_SIZE);
             self.size -= size_used;
@@ -169,6 +179,7 @@ impl FirstFitAllocator {
         }
     }
 
+    // 空き領域をtreeに追加する
     fn add_free_from_descriptor(&self, desc: &EfiMemoryDescriptor) {
         let mut start_addr = desc.physical_start() as usize;
         // ページ数 * 4096で実際のメモリサイズを取得する
@@ -192,12 +203,137 @@ impl FirstFitAllocator {
         header.as_mut().unwrap().next_header = prev_last;
     }
 
+    // uefiから渡されてきたmemory mapを元に初期化する
     pub fn init_with_mmap(&self, memory_map: &MemoryMapHolder) {
         for e in memory_map.iter() {
             if e.memory_type() != EfiMemoryType::CONVENTIONAL_MEMORY {
                 continue;
             }
             self.add_free_from_descriptor(e);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use alloc::vec;
+
+    #[test_case]
+    fn malloc_iterate_free_and_malloc() {
+        use alloc::vec::Vec;
+        for i in 0..1000 {
+            let mut vec = Vec::new();
+            vec.resize(i, 10);
+            // deallocateが呼ばれる（vecがdropするので）
+        }
+    }
+
+    #[test_case]
+    fn malloc_align() {
+        let mut pointers = [null_mut::<u8>(); 100];
+        for align in [1, 2, 4, 8, 16, 32, 4096] {
+            for e in pointers.iter_mut() {
+                *e = ALLOCATOR.alloc_with_options(
+                    Layout::from_size_align(1234, align).expect("Failed to create Layout"),
+                );
+                assert!(*e as usize != 0);
+                assert!((*e as usize) % align == 0);
+            }
+        }
+    }
+
+    #[test_case]
+    fn allocated_objects_have_no_overlap() {
+        let allocations = [
+            Layout::from_size_align(128, 128).unwrap(),
+            Layout::from_size_align(32, 32).unwrap(),
+            Layout::from_size_align(8, 8).unwrap(),
+            Layout::from_size_align(16, 16).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(4, 4).unwrap(),
+            Layout::from_size_align(2, 2).unwrap(),
+            Layout::from_size_align(600000, 64).unwrap(),
+            Layout::from_size_align(64, 64).unwrap(),
+            Layout::from_size_align(1, 1).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(3, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(600000, 64).unwrap(),
+            Layout::from_size_align(6000, 64).unwrap(),
+            Layout::from_size_align(60000, 64).unwrap(),
+            Layout::from_size_align(60000, 64).unwrap(),
+            Layout::from_size_align(60000, 64).unwrap(),
+            Layout::from_size_align(60000, 64).unwrap(),
+        ];
+        let mut pointers = vec![null_mut::<u8>(); allocations.len()];
+        for e in allocations.iter().zip(pointers.iter_mut()).enumerate() {
+            let (i, (layout, pointer)) = e;
+            *pointer = ALLOCATOR.alloc_with_options(*layout);
+            // 確保した領域に書き込む
+            for k in 0..layout.size() {
+                unsafe {
+                    *pointer.add(k) = i as u8;
+                }
+            }
+        }
+        for e in allocations.iter().zip(pointers.iter_mut()).enumerate() {
+            let (i, (layout, pointer)) = e;
+            // 書き込んだ領域が正しくアクセスできることを確認する
+            for k in 0..layout.size() {
+                assert!(unsafe { *pointer.add(k) } == i as u8);
+            }
+        }
+        for e in allocations.iter().zip(pointers.iter_mut()).step_by(2) {
+            let (layout, pointer) = e;
+            // 全部freeする
+            unsafe { ALLOCATOR.dealloc(*pointer, *layout) }
+        }
+        for e in allocations
+            .iter()
+            .zip(pointers.iter_mut())
+            .enumerate()
+            .skip(1)
+            .step_by(2)
+        {
+            let (i, (layout, pointer)) = e;
+            for k in 0..layout.size() {
+                assert!(unsafe { *pointer.add(k) } == i as u8)
+            }
+        }
+        for e in allocations
+            .iter()
+            .zip(pointers.iter_mut())
+            .enumerate()
+            .step_by(2)
+        {
+            let (i, (layout, pointer)) = e;
+            *pointer = ALLOCATOR.alloc_with_options(*layout);
+            for k in 0..layout.size() {
+                // 生ポインタに書き込む
+                unsafe { *pointer.add(k) = i as u8 }
+            }
+        }
+        for e in allocations.iter().zip(pointers.iter_mut()).enumerate() {
+            let (i, (layout, pointer)) = e;
+            for k in 0..layout.size() {
+                assert!(unsafe { *pointer.add(k) } == i as u8)
+            }
         }
     }
 }
