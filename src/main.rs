@@ -2,10 +2,13 @@
 #![no_main]
 use core::fmt::Write;
 use core::panic::PanicInfo;
+use wasabi::error;
 use wasabi::graphics::fill_rect;
 use wasabi::graphics::Bitmap;
+use wasabi::info;
+use wasabi::print::hexdump;
+use wasabi::println;
 use wasabi::qemu::exit_qemu;
-use wasabi::serial::SerialPort;
 use wasabi::uefi::exit_from_efi_boot_services;
 use wasabi::uefi::init_vram;
 use wasabi::uefi::EfiMemoryType;
@@ -15,6 +18,7 @@ use wasabi::uefi::VramTextWriter;
 use wasabi::graphics::draw_test_pattern;
 use wasabi::uefi::EfiHandle;
 use wasabi::uefi::EfiSystemTable;
+use wasabi::warn;
 use wasabi::x86::hlt;
 
 #[panic_handler]
@@ -24,8 +28,12 @@ fn panic(_info: &PanicInfo) -> ! {
 
 #[no_mangle]
 fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
-    let mut sw = SerialPort::new_for_com1();
-    writeln!(sw, "Hello via searial port").unwrap();
+    println!("Booting WasabiOS...");
+    println!("image_handle: {:#018X}", image_handle);
+    println!("efi_system_table: {:#p}", efi_system_table);
+    info!("info");
+    warn!("warn");
+    error!("error");
     let mut vram = init_vram(efi_system_table).expect("init_vram failed");
 
     let vw = vram.width();

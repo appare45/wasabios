@@ -6,6 +6,7 @@
 #![no_main]
 pub mod allocator;
 pub mod graphics;
+pub mod print;
 pub mod qemu;
 pub mod result;
 pub mod serial;
