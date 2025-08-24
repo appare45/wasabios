@@ -11,6 +11,8 @@ use core::ptr::null_mut;
 
 use alloc::boxed::Box;
 
+use crate::info;
+use crate::println;
 use crate::result::Result;
 use crate::uefi::EfiMemoryDescriptor;
 use crate::uefi::EfiMemoryType;
@@ -335,6 +337,12 @@ mod test {
                 assert!(unsafe { *pointer.add(k) } == i as u8)
             }
         }
+    }
+    #[test_case]
+    fn alloc_box() {
+        const HANDLER_STACK_SIZE: usize = 64 * 1024;
+        let b = Box::new([0u8; HANDLER_STACK_SIZE]);
+        assert!(b.len() == HANDLER_STACK_SIZE)
     }
 }
 

@@ -21,6 +21,8 @@ use wasabi::uefi::EfiHandle;
 use wasabi::uefi::EfiSystemTable;
 use wasabi::warn;
 use wasabi::x86::hlt;
+use wasabi::x86::init_exceptions;
+use wasabi::x86::trigger_debug_interrupt;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -69,6 +71,10 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     println!("{t:?}");
     let t = t.and_then(|t| t.next_level(0));
     println!("{t:?}");
+
+    let (_gdt, _idt) = init_exceptions();
+    info!("Exception initilized!");
+    trigger_debug_interrupt();
     loop {
         hlt()
     }
