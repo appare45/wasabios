@@ -11,8 +11,6 @@ use core::ptr::null_mut;
 
 use alloc::boxed::Box;
 
-use crate::info;
-use crate::println;
 use crate::result::Result;
 use crate::uefi::EfiMemoryDescriptor;
 use crate::uefi::EfiMemoryType;

@@ -10,10 +10,8 @@ use wasabi::init::init_basic_runtime;
 use wasabi::print::hexdump;
 use wasabi::println;
 use wasabi::qemu::exit_qemu;
-use wasabi::uefi::exit_from_efi_boot_services;
 use wasabi::uefi::init_vram;
 use wasabi::uefi::EfiMemoryType;
-use wasabi::uefi::MemoryMapHolder;
 use wasabi::uefi::VramTextWriter;
 
 use wasabi::graphics::draw_test_pattern;

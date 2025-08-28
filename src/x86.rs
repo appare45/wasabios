@@ -703,12 +703,12 @@ impl Drop for TaskStateSegment64 {
     }
 }
 
-pub const BIT_TYPE_CODE: u64 = 0b10u64 << 43; // コード領域
-pub const BIT_TYPE_DATA: u64 = 0b11u64 << 43; // データ領域
+pub const BIT_TYPE_CODE: u64 = 0b11u64 << 43; // コード領域
+pub const BIT_TYPE_DATA: u64 = 0b10u64 << 43; // データ領域
 
 pub const BIT_PRESENT: u64 = 1u64 << 47;
 pub const BIT_CS_LONG_MODE: u64 = 1u64 << 53;
-pub const BIT_CS_READABLE: u64 = 1u64 << 53;
+pub const BIT_CS_READABLE: u64 = 1u64 << 41;
 pub const BIT_DS_WRITABLE: u64 = 1u64 << 41;
 
 pub const KERNEL_CS: u16 = 1 << 3;
@@ -838,6 +838,7 @@ pub fn init_exceptions() -> (GdtWrapper, Idt) {
     let gdt = GdtWrapper::default();
     gdt.load();
     info!("GDT initilized");
+    let idt = Idt::new(KERNEL_CS);
     unsafe {
         write_cs(KERNEL_CS);
         write_ss(KERNEL_DS);
@@ -847,7 +848,6 @@ pub fn init_exceptions() -> (GdtWrapper, Idt) {
         write_gs(KERNEL_DS);
     }
     info!("Segment initilized");
-    let idt = Idt::new(KERNEL_CS);
     unsafe {
         asm!("sti");
     }
