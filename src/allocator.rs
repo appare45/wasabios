@@ -336,6 +336,12 @@ mod test {
             }
         }
     }
+    #[test_case]
+    fn alloc_box() {
+        const HANDLER_STACK_SIZE: usize = 64 * 1024;
+        let b = Box::new([0u8; HANDLER_STACK_SIZE]);
+        assert!(b.len() == HANDLER_STACK_SIZE)
+    }
 }
 
 unsafe impl Sync for FirstFitAllocator {}
