@@ -320,6 +320,7 @@ impl fmt::Debug for InterruptInfo {
 }
 
 // 割り込み時のエントリポイントを登録するアセンブリを生成するマクロ
+// 内部ではinthandler_commonにジャンプする
 macro_rules! interrupt_entrypoint {
     ($index:literal) => {
         global_asm!(concat!(
@@ -364,6 +365,7 @@ interrupt_entrypoint_with_ecode!(13);
 interrupt_entrypoint_with_ecode!(14);
 interrupt_entrypoint!(32);
 
+// 上のマクロで定義された割り込みハンドラ
 extern "sysv64" {
     fn interrupt_entrypoint3();
     fn interrupt_entrypoint6();
@@ -373,10 +375,12 @@ extern "sysv64" {
     fn interrupt_entrypoint32();
 }
 
+// inthandler_common
 global_asm!(
     r#"
   .global inthandler_common
   inthandler_common:
+  // レジスタをスタックに保存
     push r15
     push r14
     push r13
@@ -406,6 +410,7 @@ global_asm!(
     // inthandlerに引数として渡す
     mov rsi, rcx
 
+    // inthandler_commonからinthandlerを呼び出す
     call inthandler
 
     // rbpに保存していたスタックポインタをrspに戻す
@@ -444,6 +449,7 @@ pub fn read_cr2() -> u64 {
     cr2
 }
 
+// inthandler_commonから呼び出される関数
 #[no_mangle]
 extern "sysv64" fn inthandler(info: &InterruptInfo, index: usize) {
     error!("Intterupt Info: {:?}", info);
@@ -451,6 +457,7 @@ extern "sysv64" fn inthandler(info: &InterruptInfo, index: usize) {
     match index {
         3 => {
             error!("Breakpoint");
+            return;
         }
         6 => {
             error!("Invalid Opcode");
