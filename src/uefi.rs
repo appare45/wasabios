@@ -82,6 +82,7 @@ impl<'a> Iterator for MemoryMapIterator<'a> {
 }
 
 pub struct MemoryMapHolder {
+    // ここにEfiMemoryDescriptorの配列が入っている
     memory_map_buffer: [u8; MEMORY_MAP_BUFFER_SIZE],
     memory_map_size: usize,
     map_key: usize,
@@ -110,6 +111,7 @@ impl Default for MemoryMapHolder {
     }
 }
 
+// https://uefi.org/specs/UEFI/2.11/04_EFI_System_Table.html#efi-image-entry-point
 #[repr(C)]
 pub struct EfiBootServicesTable {
     _reserved0: [u64; 7],
@@ -127,6 +129,8 @@ pub struct EfiBootServicesTable {
         interface: *mut *mut EfiVoid,
     ) -> EfiStatus,
     _reserved2: [u64; 9],
+    // UEFI内で使用したメモリを開放する
+    // MemoryMapHolderで取得したmap_keyを指定する
     exit_boot_services: extern "win64" fn(image_handle: EfiHandle, map_key: usize) -> EfiStatus,
     _reserved4: [u64; 10],
     locate_protocol: extern "win64" fn(
@@ -329,6 +333,7 @@ pub fn exit_from_efi_boot_services(
     efi_system_table: &EfiSystemTable,
     memory_map: &mut MemoryMapHolder,
 ) {
+    // 最新のメモリマップを取得しメモリを開放する処理を繰り返す
     loop {
         let status = efi_system_table.boot_services.get_memory_map(memory_map);
         assert_eq!(status, EfiStatus::Success);

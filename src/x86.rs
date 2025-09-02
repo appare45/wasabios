@@ -42,8 +42,6 @@ pub fn write_io_port_u8(port: u16, data: u8) {
     }
 }
 
-pub type RootPageTable = [u8; 1024];
-
 pub fn read_cr3() -> *mut PML4 {
     let mut cr3: *mut PML4;
     unsafe {
@@ -680,7 +678,7 @@ impl TaskStateSegment64 {
         const HANDLER_STACK_SIZE: usize = 64 * 1024;
         let stack = Box::new([0u8; HANDLER_STACK_SIZE]);
         let rsp = unsafe { stack.as_ptr().add(HANDLER_STACK_SIZE) as u64 };
-        core::mem::forget(stack); // 所有権を放棄
+        core::mem::forget(stack); // 所有権を放棄・開放しない
         rsp
     }
     pub fn new() -> Self {
@@ -845,7 +843,6 @@ pub fn init_exceptions() -> (GdtWrapper, Idt) {
     let gdt = GdtWrapper::default();
     gdt.load();
     info!("GDT initilized");
-    let idt = Idt::new(KERNEL_CS);
     unsafe {
         write_cs(KERNEL_CS);
         write_ss(KERNEL_DS);
@@ -855,6 +852,7 @@ pub fn init_exceptions() -> (GdtWrapper, Idt) {
         write_gs(KERNEL_DS);
     }
     info!("Segment initilized");
+    let idt = Idt::new(KERNEL_CS);
     unsafe {
         asm!("sti");
     }

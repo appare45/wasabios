@@ -28,6 +28,7 @@ fn panic(_info: &PanicInfo) -> ! {
     exit_qemu(wasabi::qemu::QemuExitCode::Fail)
 }
 
+// https://uefi.org/specs/UEFI/2.11/04_EFI_System_Table.html#efi-image-entry-point
 #[no_mangle]
 fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     println!("Booting WasabiOS...");

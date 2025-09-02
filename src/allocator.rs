@@ -197,6 +197,7 @@ impl FirstFitAllocator {
         header.is_allocated = false;
         header.size = size;
         let mut first_header = self.first_header.borrow_mut();
+        // replaceで置き換えて、元の値を得られる
         let prev_last = first_header.replace(header);
         drop(first_header);
         let mut header = self.first_header.borrow_mut();
