@@ -7,6 +7,7 @@ use wasabi::graphics::fill_rect;
 use wasabi::graphics::Bitmap;
 use wasabi::info;
 use wasabi::init::init_basic_runtime;
+use wasabi::init::init_paging;
 use wasabi::print::hexdump;
 use wasabi::println;
 use wasabi::qemu::exit_qemu;
@@ -80,6 +81,8 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     info!("Exception initilized!");
     trigger_debug_interrupt();
     info!("Exception continued!");
+    init_paging(&memory_map);
+    info!("Paging enabled!");
     loop {
         hlt()
     }

@@ -12,6 +12,7 @@ use core::marker::PhantomData;
 use core::mem::offset_of;
 use core::mem::size_of;
 use core::mem::size_of_val;
+use core::mem::MaybeUninit;
 use core::pin::Pin;
 
 pub fn hlt() {
@@ -76,6 +77,7 @@ pub enum TranslationResult {
 // ここの値はCPUから得られた値をそのまま変換して得る
 #[repr(transparent)]
 pub struct Entry<const LEVEL: usize, const SHIFT: usize, NEXT> {
+    // 実際のメモリ領域の先頭アドレスと属性ビット、型はNEXT型であることに注意
     value: u64,
     next_type: PhantomData<NEXT>,
 }
@@ -114,6 +116,39 @@ impl<const LEVEL: usize, const SHIFT: usize, NEXT> Entry<LEVEL, SHIFT, NEXT> {
             Err("Page Not Found")
         }
     }
+    fn table_mut(&mut self) -> Result<&mut NEXT> {
+        if self.is_present() {
+            Ok(unsafe { &mut *((self.value & !ATTR_MASK) as *mut NEXT) })
+        } else {
+            Err("Page Not Found")
+        }
+    }
+    fn set_page(&mut self, phys: u64, attr: PageAttr) -> Result<()> {
+        if phys & ATTR_MASK != 0 {
+            Err("phys is not aligned")
+        } else {
+            self.value = phys | (attr as u64);
+            Ok(())
+        }
+    }
+    fn populate(&mut self) -> Result<&mut Self> {
+        if self.is_present() {
+            Err("Page is already populated")
+        } else {
+            // ゼロ埋めされた領域を新たに確保して、NEXT型として扱う
+            let next: Box<NEXT> = Box::new(unsafe { MaybeUninit::<NEXT>::zeroed().assume_init() });
+            // そのうえで、エントリを読み書き可能な状態で設定する
+            self.value = Box::into_raw(next) as u64 | (PageAttr::ReadWriteKernel as u64);
+            Ok(self)
+        }
+    }
+    fn ensure_populated(&mut self) -> Result<&mut Self> {
+        if self.is_present() {
+            Ok(self)
+        } else {
+            self.populate()
+        }
+    }
 }
 
 impl<const LEVEL: usize, const SHIFT: usize, NEXT> fmt::Display for Entry<LEVEL, SHIFT, NEXT> {
@@ -148,6 +183,9 @@ impl<const LEVEL: usize, const SHIFT: usize, NEXT> Table<LEVEL, SHIFT, NEXT> {
     pub fn next_level(&self, index: usize) -> Option<&NEXT> {
         self.entry.get(index).and_then(|e| e.table().ok())
     }
+    fn calc_index(&self, addr: u64) -> usize {
+        ((addr >> SHIFT) & 0b1_111_111) as usize
+    }
 }
 
 impl<const LEVEL: usize, const SHIFT: usize, NEXT> fmt::Debug for Table<LEVEL, SHIFT, NEXT> {
@@ -160,6 +198,52 @@ pub type PT = Table<1, 12, [u8; PAGE_SIZE]>;
 pub type PD = Table<2, 21, PT>;
 pub type PDPT = Table<3, 30, PD>;
 pub type PML4 = Table<4, 39, PDPT>;
+
+impl Default for PML4 {
+    fn default() -> Self {
+        unsafe { MaybeUninit::<Self>::zeroed().assume_init() }
+    }
+}
+
+impl PML4 {
+    pub fn new() -> Box<Self> {
+        Box::new(Self::default())
+    }
+    // 仮想アドレスと物理アドレスのマッピングを新たに作成する
+    pub fn create_mapping(
+        &mut self,
+        virt_start: u64,
+        virt_end: u64,
+        phys: u64,
+        attr: PageAttr,
+    ) -> Result<()> {
+        if virt_start & ATTR_MASK != 0 {
+            return Err("Invalid virt_start");
+        }
+        if virt_end & ATTR_MASK != 0 {
+            return Err("Invalid virt_end");
+        }
+        if phys & ATTR_MASK != 0 {
+            return Err("Invalid phys");
+        }
+        if virt_start >= virt_end {
+            return Err("Invalid virt range");
+        }
+        for addr in (virt_start..virt_end).step_by(PAGE_SIZE) {
+            // 4レベル分掘り下げていく
+            let index = self.calc_index(addr);
+            let table = self.entry[index].ensure_populated()?.table_mut()?;
+            let index = table.calc_index(addr);
+            let table = table.entry[index].ensure_populated()?.table_mut()?;
+            let index = table.calc_index(addr);
+            let table = table.entry[index].ensure_populated()?.table_mut()?;
+            let index = table.calc_index(addr);
+            let pte = &mut table.entry[index];
+            pte.set_page(phys + addr - virt_start, attr)?;
+        }
+        Ok(())
+    }
+}
 
 // Code Segment
 // movとかで直接変更すると壊れる
@@ -861,4 +945,9 @@ pub fn init_exceptions() -> (GdtWrapper, Idt) {
 
 pub fn trigger_debug_interrupt() {
     unsafe { asm!("int3") }
+}
+
+#[no_mangle]
+pub unsafe fn write_cr3(table: *const PML4) {
+    asm!("mov cr3, rax", in("rax") table)
 }
