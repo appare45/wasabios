@@ -184,7 +184,7 @@ impl<const LEVEL: usize, const SHIFT: usize, NEXT> Table<LEVEL, SHIFT, NEXT> {
         self.entry.get(index).and_then(|e| e.table().ok())
     }
     fn calc_index(&self, addr: u64) -> usize {
-        ((addr >> SHIFT) & 0b1_111_111) as usize
+        ((addr >> SHIFT) & 0b1_1111_1111) as usize
     }
 }
 
