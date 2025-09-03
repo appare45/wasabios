@@ -591,6 +591,7 @@ extern "sysv64" fn inthandler(info: &InterruptInfo, index: usize) {
             error!("Not handled");
         }
     };
+    panic!("Failal exception")
 }
 
 #[no_mangle]
