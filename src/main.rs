@@ -14,6 +14,7 @@ use wasabi::qemu::exit_qemu;
 use wasabi::uefi::init_vram;
 use wasabi::uefi::EfiMemoryType;
 use wasabi::uefi::VramTextWriter;
+use wasabi::x86::flush_tlb;
 
 use wasabi::graphics::draw_test_pattern;
 use wasabi::uefi::locate_loaded_image_protocol;
@@ -22,7 +23,9 @@ use wasabi::uefi::EfiSystemTable;
 use wasabi::warn;
 use wasabi::x86::hlt;
 use wasabi::x86::init_exceptions;
+use wasabi::x86::read_cr3;
 use wasabi::x86::trigger_debug_interrupt;
+use wasabi::x86::PageAttr;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -83,6 +86,30 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     info!("Exception continued!");
     init_paging(&memory_map);
     info!("Paging enabled!");
+
+    info!("Reading from memory address 0...");
+
+    #[allow(clippy::zero_ptr)]
+    #[allow(deref_nullptr)]
+    let value_at_zero = unsafe { *(0 as *const u64) };
+    info!("Value at address 0: {value_at_zero}");
+
+    // NullPtrを読ませないためにPageTableで0~4096をアクセス不可にしておく
+    let page_table = read_cr3();
+    unsafe {
+        (*page_table)
+            .create_mapping(0, 4096, 0, PageAttr::NotPresent)
+            .expect("failed to unmap page 0");
+    }
+    // CPUが持っているTLBキャッシュをクリアする
+    flush_tlb();
+
+    info!("Reading from memory address 0 to be exception");
+    #[allow(clippy::zero_ptr)]
+    #[allow(deref_nullptr)]
+    let value_at_zero = unsafe { *(0 as *const u64) };
+    info!("Value at address 0: {value_at_zero}");
+
     loop {
         hlt()
     }
