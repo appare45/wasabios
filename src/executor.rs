@@ -1,0 +1,70 @@
+extern crate alloc;
+
+use alloc::boxed::Box;
+
+use crate::info;
+use crate::result::Result;
+use crate::x86::busy_loop_hint;
+use core::fmt::Debug;
+use core::future::Future;
+use core::panic::Location;
+use core::pin::Pin;
+use core::ptr::null;
+use core::task::Context;
+use core::task::Poll;
+use core::task::RawWaker;
+use core::task::RawWakerVTable;
+use core::task::Waker;
+
+pub struct Task<T> {
+    future: Pin<Box<dyn Future<Output = Result<T>>>>,
+    created_at_file: &'static str,
+    created_at_line: u32,
+}
+
+impl<T> Debug for Task<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Task({}:{})", self.created_at_file, self.created_at_line)
+    }
+}
+
+impl<T> Task<T> {
+    #[track_caller]
+    pub fn new(future: impl Future<Output = Result<T>> + 'static) -> Self {
+        Task {
+            future: Box::pin(future),
+            created_at_file: Location::caller().file(),
+            created_at_line: Location::caller().line(),
+        }
+    }
+    fn poll(&mut self, context: &mut Context) -> Poll<Result<T>> {
+        self.future.as_mut().poll(context)
+    }
+}
+
+fn no_op_waker() -> Waker {
+    unsafe { Waker::from_raw(no_op_raw_waker()) }
+}
+
+fn no_op_raw_waker() -> RawWaker {
+    fn no_op(_: *const ()) {}
+    fn clone(_: *const ()) -> RawWaker {
+        no_op_raw_waker()
+    }
+    let vtable = &RawWakerVTable::new(clone, no_op, no_op, no_op);
+    RawWaker::new(null::<()>(), vtable)
+}
+
+// Futureを受け取って結果を返す
+pub fn block_on<T>(future: impl Future<Output = Result<T>> + 'static) -> Result<T> {
+    let mut task = Task::new(future);
+    info!("Starting task {:?}", task);
+    loop {
+        let waker = no_op_waker();
+        let mut context = Context::from_waker(&waker);
+        match task.poll(&mut context) {
+            Poll::Ready(result) => return result,
+            Poll::Pending => busy_loop_hint(),
+        }
+    }
+}

@@ -3,6 +3,7 @@
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use wasabi::error;
+use wasabi::executor::block_on;
 use wasabi::graphics::fill_rect;
 use wasabi::graphics::Bitmap;
 use wasabi::info;
@@ -95,6 +96,12 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     }
     // CPUが持っているTLBキャッシュをクリアする
     flush_tlb();
+
+    let result = block_on(async {
+        info!("Hello from the asnyc world!");
+        Ok(())
+    });
+    info!("async block done: {result:?}");
 
     loop {
         hlt()
