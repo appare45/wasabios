@@ -7,12 +7,14 @@ use wasabi::graphics::fill_rect;
 use wasabi::graphics::Bitmap;
 use wasabi::info;
 use wasabi::init::init_basic_runtime;
+use wasabi::init::init_paging;
 use wasabi::print::hexdump;
 use wasabi::println;
 use wasabi::qemu::exit_qemu;
 use wasabi::uefi::init_vram;
 use wasabi::uefi::EfiMemoryType;
 use wasabi::uefi::VramTextWriter;
+use wasabi::x86::flush_tlb;
 
 use wasabi::graphics::draw_test_pattern;
 use wasabi::uefi::locate_loaded_image_protocol;
@@ -21,7 +23,9 @@ use wasabi::uefi::EfiSystemTable;
 use wasabi::warn;
 use wasabi::x86::hlt;
 use wasabi::x86::init_exceptions;
+use wasabi::x86::read_cr3;
 use wasabi::x86::trigger_debug_interrupt;
+use wasabi::x86::PageAttr;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -80,6 +84,18 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     info!("Exception initilized!");
     trigger_debug_interrupt();
     info!("Exception continued!");
+    init_paging(&memory_map);
+    info!("Paging enabled!");
+    // NullPtrを読ませないためにPageTableで0~4096をアクセス不可にしておく
+    let page_table = read_cr3();
+    unsafe {
+        (*page_table)
+            .create_mapping(0, 4096, 0, PageAttr::NotPresent)
+            .expect("failed to unmap page 0");
+    }
+    // CPUが持っているTLBキャッシュをクリアする
+    flush_tlb();
+
     loop {
         hlt()
     }
