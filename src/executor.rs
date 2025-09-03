@@ -1,6 +1,7 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use alloc::collections::VecDeque;
 
 use crate::info;
 use crate::result::Result;
@@ -66,5 +67,51 @@ pub fn block_on<T>(future: impl Future<Output = Result<T>> + 'static) -> Result<
             Poll::Ready(result) => return result,
             Poll::Pending => busy_loop_hint(),
         }
+    }
+}
+
+pub struct Executor {
+    task: Option<VecDeque<Task<()>>>,
+}
+
+impl Executor {
+    pub const fn new() -> Self {
+        Self { task: None }
+    }
+
+    fn task_queue(&mut self) -> &mut VecDeque<Task<()>> {
+        if self.task.is_none() {
+            self.task = Some(VecDeque::new());
+        }
+        self.task.as_mut().unwrap()
+    }
+
+    pub fn enqueue(&mut self, task: Task<()>) {
+        self.task_queue().push_back(task);
+    }
+
+    pub fn run(mut executor: Self) {
+        info!("Executor starts running...");
+        loop {
+            let task = executor.task_queue().pop_front();
+            if let Some(mut task) = task {
+                let waker = no_op_waker();
+                let mut context = Context::from_waker(&waker);
+                match task.poll(&mut context) {
+                    Poll::Pending => {
+                        executor.task_queue().push_back(task);
+                    }
+                    Poll::Ready(result) => {
+                        info!("Task {:?} finished with {:?}", task, result);
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Default for Executor {
+    fn default() -> Self {
+        Self::new()
     }
 }
