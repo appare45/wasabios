@@ -31,6 +31,8 @@ use wasabi::x86::read_cr3;
 use wasabi::x86::trigger_debug_interrupt;
 use wasabi::x86::PageAttr;
 
+static mut GLOBAL_HPET: Option<Hpet> = None;
+
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     exit_qemu(wasabi::qemu::QemuExitCode::Fail)
@@ -107,8 +109,9 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
         .expect("Failed to get HPET base address");
     info!("HPET is at {hpet:#p}");
     let hpet = Hpet::new(hpet);
+    let hpet = unsafe { GLOBAL_HPET.insert(hpet) };
 
-    let task1 = Task::new(async move {
+    let task1 = Task::new(async {
         for i in 100..=103 {
             info!("{i} hpet.main_counter = {}", hpet.main_counter());
             yield_execution().await;
@@ -118,7 +121,7 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
 
     let task2 = Task::new(async {
         for i in 200..=203 {
-            info!("task2: {}", i);
+            info!("{i} hpet.main_counter = {}", hpet.main_counter());
             yield_execution().await;
         }
         Ok(())
