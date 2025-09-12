@@ -57,6 +57,7 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     fill_rect(&mut vram, 0x000000, 0, 0, vw, vh).expect("fill_rect failed");
     draw_test_pattern(&mut vram);
     let mut w = VramTextWriter::new(&mut vram);
+    let acpi = efi_system_table.acpi_table().expect("ACPI table not found");
 
     let memory_map = init_basic_runtime(image_handle, efi_system_table);
     let mut total_memory_pages = 0;
@@ -98,6 +99,12 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     }
     // CPUが持っているTLBキャッシュをクリアする
     flush_tlb();
+
+    let hpet = acpi.hpet().expect("Failed to get HPET from ACPI");
+    let hpet = hpet
+        .base_address()
+        .expect("Failed to get HPET base address");
+    info!("HPET is at {hpet:#018X}");
 
     let task1 = Task::new(async {
         for i in 100..=103 {

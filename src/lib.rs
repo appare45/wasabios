@@ -4,6 +4,7 @@
 #![test_runner(crate::test_runner::test_runner)]
 #![reexport_test_harness_main = "run_unit_tsets"]
 #![no_main]
+pub mod acpi;
 pub mod allocator;
 pub mod executor;
 pub mod graphics;
