@@ -61,3 +61,16 @@ pub fn init_hpet(acpi: &AcpiRsdp) {
     let hpet = Hpet::new(hpet);
     set_global_hpet(hpet);
 }
+
+pub fn init_allocator(memory_map: &MemoryMapHolder) {
+    let mut total_memory_pages = 0;
+    for e in memory_map.iter() {
+        if e.memory_type() != EfiMemoryType::CONVENTIONAL_MEMORY {
+            continue;
+        }
+        total_memory_pages += e.number_of_pages();
+        info!("{e:?}");
+    }
+    let total_memory_size_mib = total_memory_pages * 4096 / 1024 / 1024;
+    info!("Total: {total_memory_pages} pages = {total_memory_size_mib} MiB");
+}
