@@ -7,6 +7,7 @@ use wasabi::error;
 use wasabi::executor::Executor;
 use wasabi::executor::Task;
 use wasabi::executor::TimeoutFuture;
+use wasabi::graphics::BitmapTextWriter;
 use wasabi::hpet::global_timestamp;
 use wasabi::info;
 use wasabi::init::init_allocator;
@@ -18,7 +19,6 @@ use wasabi::print::hexdump;
 use wasabi::println;
 use wasabi::qemu::exit_qemu;
 use wasabi::uefi::init_vram;
-use wasabi::uefi::VramTextWriter;
 
 use wasabi::uefi::locate_loaded_image_protocol;
 use wasabi::uefi::EfiHandle;
@@ -49,7 +49,7 @@ fn efi_main(image_handle: EfiHandle, efi_system_table: &EfiSystemTable) {
     let mut vram = init_vram(efi_system_table).expect("init_vram failed");
 
     init_display(&mut vram);
-    let mut w = VramTextWriter::new(&mut vram);
+    let mut w = BitmapTextWriter::new(&mut vram);
     let acpi = efi_system_table.acpi_table().expect("ACPI table not found");
 
     let memory_map = init_basic_runtime(image_handle, efi_system_table);
