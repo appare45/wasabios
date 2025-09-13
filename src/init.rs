@@ -2,10 +2,14 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use crate::acpi::AcpiRsdp;
+use crate::graphics::draw_test_pattern;
+use crate::graphics::fill_rect;
+use crate::graphics::Bitmap;
 use crate::hpet::set_global_hpet;
 use crate::hpet::Hpet;
 use crate::info;
 use crate::uefi::EfiMemoryType;
+use crate::uefi::VramBufferInfo;
 use crate::x86::write_cr3;
 use crate::x86::PageAttr;
 use core::cmp::max;
@@ -76,4 +80,12 @@ pub fn init_allocator(memory_map: &MemoryMapHolder) {
     }
     let total_memory_size_mib = total_memory_pages * 4096 / 1024 / 1024;
     info!("Total: {total_memory_pages} pages = {total_memory_size_mib} MiB");
+}
+
+pub fn init_display(vram: &mut VramBufferInfo) {
+    let vw = vram.width();
+    let vh = vram.height();
+
+    fill_rect(vram, 0x000000, 0, 0, vw, vh).expect("fill_rect failed");
+    draw_test_pattern(vram);
 }
