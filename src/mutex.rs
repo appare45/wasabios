@@ -99,7 +99,7 @@ impl<T> Mutex<T> {
             .is_ok()
         {
             self.taker_line_num
-                .store(Location::caller().line() as u32, Ordering::SeqCst);
+                .store(Location::caller().line(), Ordering::SeqCst);
             Ok(unsafe { MutexGuard::new(self, &self.data) })
         } else {
             Err("Locke failed")
