@@ -24,8 +24,12 @@ impl LineStatus {
         Self { value }
     }
 
-    fn received(&self) -> bool {
+    fn ready(&self) -> bool {
         self.value & 0x01 == 1
+    }
+
+    fn empty(&self) -> bool {
+        self.value & 0x20 == 1
     }
 }
 
@@ -64,14 +68,14 @@ impl SerialPort {
     }
 
     pub fn send_char(&self, c: char) {
-        while (read_io_port_u8(self.base + 5) & 0x20) == 0 {
+        while self.get_line_status().empty() {
             busy_loop_hint();
         }
         write_io_port_u8(self.base, c as u8)
     }
 
     pub fn try_read(&self) -> Option<u8> {
-        if !self.get_line_status().received() {
+        if !self.get_line_status().ready() {
             None
         } else {
             let c = read_io_port_u8(self.base);
