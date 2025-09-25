@@ -13,6 +13,7 @@ qemu-system-x86_64 \
   -bios third_party/ovmf/RELEASEX64_OVMF.fd \
   -drive format=raw,file=fat:rw:mnt \
   -chardev stdio,id=char_com1,mux=on,logfile=log/com1.txt \
+  -machine q35 \
   -serial chardev:char_com1 \
   -device isa-debug-exit,iobase=0xf4,iosize=0x01
 RETCODE=$?
