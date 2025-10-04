@@ -1,6 +1,5 @@
 use core::fmt;
 use core::mem::size_of;
-use core::ops::Add;
 
 use crate::hpet::HpetRegisters;
 use crate::result::Result;

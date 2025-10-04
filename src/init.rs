@@ -8,6 +8,7 @@ use crate::graphics::Bitmap;
 use crate::hpet::set_global_hpet;
 use crate::hpet::Hpet;
 use crate::info;
+use crate::pci::Pci;
 use crate::uefi::EfiMemoryType;
 use crate::uefi::VramBufferInfo;
 use crate::x86::write_cr3;
@@ -97,5 +98,7 @@ pub fn init_pci(acpi: &AcpiRsdp) {
                 info!("{}", e);
             }
         }
+        let pci = Pci::new(mcfg);
+        pci.probe_devices();
     }
 }
